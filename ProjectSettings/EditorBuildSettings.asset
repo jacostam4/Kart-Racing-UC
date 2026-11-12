@@ -6,7 +6,13 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/SampleScene.unity
-    guid: 99c9720ab356a0642a771bea13969a05
+    path: Assets/KartRacingUC/Scenes/MainMenu.unity
+    guid: a7778077ff70c0a4c9a97b3990b8905e
+  - enabled: 1
+    path: Assets/KartRacingUC/Scenes/CharacterSelection.unity
+    guid: 0d6e212e270f91e479582f3619e6e57b
+  - enabled: 1
+    path: Assets/KartRacingUC/Scenes/TestKart.unity
+    guid: 8b5e20246900ff04d8913712cdf44be6
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

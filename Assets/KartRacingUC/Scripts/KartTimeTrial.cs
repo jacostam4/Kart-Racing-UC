@@ -7,6 +7,7 @@ public sealed class KartTimeTrial : MonoBehaviour
     [SerializeField] private KartStartLights lights;
     [SerializeField] private Transform[] checkpoints;
     [SerializeField] private Transform finish;
+    [SerializeField] private KartRival rival;
 
     private const int TotalLaps = 3;
     private const float GateHalfWidth = 4.15f;
@@ -22,6 +23,9 @@ public sealed class KartTimeTrial : MonoBehaviour
     private KartNitroBottle[] bottles;
     private int lastBottleA = -1;
     private int lastBottleB = -1;
+    private string rivalName = "Gabriel";
+    public void SetRivalName(string name) => rivalName = name;
+
     private GUIStyle caption;
     private GUIStyle value;
     private GUIStyle title;
@@ -170,8 +174,15 @@ public sealed class KartTimeTrial : MonoBehaviour
             GUI.color = new Color(0.12f, 0.16f, 0.21f, 0.95f);
             GUI.DrawTexture(new Rect(x, y, 310, 116), Texture2D.whiteTexture);
             GUI.color = oldColor;
-            GUI.Label(new Rect(x + 19, y + 13, 280, 42), "Carrera completada", title);
+            string result = rival == null ? "Carrera completada" :
+                rival.Finished && rival.FinishTime < finalTime ? $"{rivalName} ganó" : "¡Ganaste!";
+            GUI.Label(new Rect(x + 19, y + 13, 280, 42), result, title);
             GUI.Label(new Rect(x + 20, y + 67, 270, 26), "Pulsa R para volver a la parrilla", caption);
+        }
+        else if (running && rival != null)
+        {
+            string rivalStatus = rival.Finished ? $"{rivalName} llegó a la meta" : $"{rivalName} · vuelta {rival.Lap} / {TotalLaps}";
+            GUI.Label(new Rect(28, 101, 280, 27), rivalStatus, caption);
         }
         else if (!running)
         {
@@ -207,5 +218,7 @@ public sealed class KartTimeTrial : MonoBehaviour
         return $"{milliseconds / 60000:00}:{milliseconds / 1000 % 60:00}.{milliseconds % 1000:000}";
     }
 }
+
+
 
 

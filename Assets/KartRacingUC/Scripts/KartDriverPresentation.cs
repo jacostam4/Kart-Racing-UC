@@ -13,15 +13,35 @@ public sealed class KartDriverPresentation : MonoBehaviour
     private readonly Dictionary<Transform, Quaternion> restRotations = new();
     private float steering;
     private KartMovement movement;
+    private KartRival rival;
 
     private void OnEnable()
+    {
+        steeringRest = steeringWheel.localRotation;
+        BindPose();
+    }
+
+    public void ReplaceDriver(GameObject model)
+    {
+        Vector3 scale = driver.localScale;
+        driver.gameObject.SetActive(false);
+        var avatar = Instantiate(model, seat, false);
+        avatar.transform.localScale = scale;
+        var animator = avatar.GetComponent<Animator>();
+        if (animator != null)
+            animator.enabled = false;
+        driver = avatar.transform;
+        BindPose();
+    }
+
+    private void BindPose()
     {
         bones.Clear();
         restRotations.Clear();
         foreach (var bone in driver.GetComponentsInChildren<Transform>(true))
             bones.TryAdd(bone.name, bone);
         movement = GetComponent<KartMovement>();
-        steeringRest = steeringWheel.localRotation;
+        rival = GetComponent<KartRival>();
         foreach (var bone in bones.Values)
             restRotations.Add(bone, bone.localRotation);
         ApplyPose();
@@ -29,7 +49,7 @@ public sealed class KartDriverPresentation : MonoBehaviour
 
     private void LateUpdate()
     {
-        steering = movement != null ? movement.Steering : 0;
+        steering = movement != null ? movement.Steering : rival != null ? rival.Steering : 0;
         ApplyPose();
     }
 
@@ -87,6 +107,8 @@ public sealed class KartDriverPresentation : MonoBehaviour
         bone.rotation = Quaternion.FromToRotation(child.position - bone.position, direction) * bone.rotation;
     }
 }
+
+
 
 
 
