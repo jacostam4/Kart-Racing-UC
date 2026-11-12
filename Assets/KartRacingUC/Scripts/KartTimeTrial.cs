@@ -24,7 +24,50 @@ public sealed class KartTimeTrial : MonoBehaviour
     private int lastBottleA = -1;
     private int lastBottleB = -1;
     private string rivalName = "Gabriel";
-    public void SetRivalName(string name) => rivalName = name;
+    public void SetRivalName(string name)
+    {
+        rivalName = name;
+        if (rival != null)
+            rival.DisplayName = name;
+    }
+    // Solo lectura: permiten que otros scripts (como KartFiesta) consulten el estado sin cambiarlo.
+    public string RivalName => rivalName;
+    public bool Finished => finished;
+    public int Racers => KartRival.All.Count + 1;
+    // KartLevels lo apaga porque dibuja su propia pantalla final con Canvas.
+    public bool ShowFinishPanel { get; set; } = true;
+
+    // Puesto del jugador: 1 + cuántos rivales van más adelante.
+    public int Place
+    {
+        get
+        {
+            int place = 1;
+            float me = PlayerProgress();
+            foreach (var other in KartRival.All)
+            {
+                if (finished)
+                {
+                    if (other.Finished && other.FinishTime < finalTime)
+                        place++;
+                }
+                else if (other.Finished || other.Progress > me)
+                {
+                    place++;
+                }
+            }
+            return place;
+        }
+    }
+
+    private float PlayerProgress()
+    {
+        float onLap = KartRival.RouteDistance(kart.transform.position);
+        // Antes de cruzar la meta (en la parrilla o al final de la vuelta) cuenta como vuelta anterior.
+        if (nextCheckpoint == 0 && onLap > KartRival.LoopLength / 2)
+            onLap -= KartRival.LoopLength;
+        return completedLaps * KartRival.LoopLength + onLap;
+    }
 
     private GUIStyle caption;
     private GUIStyle value;
@@ -167,24 +210,29 @@ public sealed class KartTimeTrial : MonoBehaviour
 
         DrawNitro(scale, oldColor);
 
-        if (finished)
+        if (finished && ShowFinishPanel)
         {
             float x = (Screen.width / scale - 310) * 0.5f;
             float y = (Screen.height / scale - 116) * 0.5f;
             GUI.color = new Color(0.12f, 0.16f, 0.21f, 0.95f);
             GUI.DrawTexture(new Rect(x, y, 310, 116), Texture2D.whiteTexture);
             GUI.color = oldColor;
-            string result = rival == null ? "Carrera completada" :
-                rival.Finished && rival.FinishTime < finalTime ? $"{rivalName} ganó" : "¡Ganaste!";
+            int place = Place;
+            string result = KartRival.All.Count == 0 ? "Carrera completada" :
+                place == 1 ? "¡Ganaste! 1º" : $"Quedaste {place}º";
             GUI.Label(new Rect(x + 19, y + 13, 280, 42), result, title);
             GUI.Label(new Rect(x + 20, y + 67, 270, 26), "Pulsa R para volver a la parrilla", caption);
         }
-        else if (running && rival != null)
+        else if (running && KartRival.All.Count > 0)
         {
-            string rivalStatus = rival.Finished ? $"{rivalName} llegó a la meta" : $"{rivalName} · vuelta {rival.Lap} / {TotalLaps}";
-            GUI.Label(new Rect(28, 101, 280, 27), rivalStatus, caption);
+            for (int i = 0; i < KartRival.All.Count; i++)
+            {
+                var other = KartRival.All[i];
+                string rivalStatus = other.Finished ? $"{other.DisplayName} llegó a la meta" : $"{other.DisplayName} · vuelta {other.Lap} / {TotalLaps}";
+                GUI.Label(new Rect(28, 101 + i * 22, 280, 27), rivalStatus, caption);
+            }
         }
-        else if (!running)
+        else if (!running && !finished)
         {
             GUI.Label(new Rect(28, 101, 250, 27), "Espera la luz verde", caption);
         }

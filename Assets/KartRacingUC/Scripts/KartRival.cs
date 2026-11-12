@@ -1,18 +1,27 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public sealed class KartRival : MonoBehaviour
 {
+    // Lista de todos los rivales que están en la carrera (para que se esquiven entre ellos y para el puesto).
+    public static readonly List<KartRival> All = new();
+    // Dificultad del nivel: la cambia KartLevels (0.9 = más lentos, 1.07 = más rápidos).
+    public static float Difficulty = 1;
+
     [SerializeField] private KartStartLights lights;
     [SerializeField] private KartMovement player;
     [SerializeField] private Collider road;
     [SerializeField] private Transform[] wheels;
+    // Dónde arranca en la parrilla y qué tan rápido va. Los valores por defecto son los de siempre.
+    [SerializeField] private float gridDistance = -7;
+    [SerializeField] private float startLane = 1.75f;
+    [SerializeField] private float speedFactor = 1;
 
     private const float HalfStraight = 26;
     private const float Radius = 20;
     private const float StraightLength = 2 * HalfStraight;
     private const float ArcLength = Mathf.PI * Radius;
-    private const float LoopLength = 2 * (StraightLength + ArcLength);
-    private const float GridDistance = -7;
+    public const float LoopLength = 2 * (StraightLength + ArcLength);
     private const float FinishDistance = LoopLength * 3;
     private const float TopSpeed = 13;
     private const float CornerSpeed = 10.5f;
@@ -31,9 +40,21 @@ public sealed class KartRival : MonoBehaviour
     public bool Finished { get; private set; }
     public double FinishTime { get; private set; }
     public int Lap => Mathf.Clamp(Mathf.FloorToInt(distance / LoopLength) + 1, 1, 3);
+    public float Progress => distance;
+    public string DisplayName { get; set; } = "Gabriel";
+
+    // Lo usa el segundo rival: le da otro puesto en la parrilla y otra velocidad.
+    public void Configure(float grid, float laneOnGrid, float pace)
+    {
+        gridDistance = grid;
+        startLane = laneOnGrid;
+        speedFactor = pace;
+        ResetRival();
+    }
 
     private void OnEnable()
     {
+        All.Add(this);
         lights.CountdownStarted += ResetRival;
         lights.GreenLight += Begin;
         ResetRival();
@@ -41,15 +62,16 @@ public sealed class KartRival : MonoBehaviour
 
     private void OnDisable()
     {
+        All.Remove(this);
         lights.CountdownStarted -= ResetRival;
         lights.GreenLight -= Begin;
     }
 
     private void ResetRival()
     {
-        distance = GridDistance;
+        distance = gridDistance;
         speed = 0;
-        lane = 1.75f;
+        lane = startLane;
         spin = 0;
         passLane = lane;
         passUntil = 0;
@@ -81,8 +103,25 @@ public sealed class KartRival : MonoBehaviour
             Mathf.Abs(player.transform.position.y - transform.position.y) < 3;
         bool corner = curveDistance == 0;
         float dt = Time.fixedDeltaTime;
-        float targetSpeed = Mathf.Min(TopSpeed,
-            Mathf.Sqrt(CornerSpeed * CornerSpeed + 2 * Braking * Mathf.Max(0, curveDistance - 2.5f)));
+        float targetSpeed = Mathf.Min(TopSpeed * speedFactor * Difficulty,
+            Mathf.Sqrt(Mathf.Pow(CornerSpeed * speedFactor * Difficulty, 2) + 2 * Braking * Mathf.Max(0, curveDistance - 2.5f)));
+
+        // Si otro rival va justo adelante en el mismo carril: frena un poco e intenta pasarlo por el lado.
+        float wanted = targetSpeed;
+        foreach (var other in All)
+        {
+            if (other == this)
+                continue;
+            float gap = other.distance - distance;
+            if (gap <= 0 || gap > 7 || Mathf.Abs(other.lane - lane) > 1.7f)
+                continue;
+            if (Time.time >= passUntil && wanted > other.speed + 0.5f)
+            {
+                passLane = other.lane >= 0 ? -LaneLimit : LaneLimit;
+                passUntil = Time.time + 2;
+            }
+            targetSpeed = Mathf.Min(targetSpeed, Mathf.Max(0, other.speed + (gap - 3.2f) * 1.25f));
+        }
 
         if (playerOnTrack && ahead > 0 && ahead < 10 && separation < 1.9f &&
             targetSpeed > player.Speed + 0.8f && Time.time >= passUntil)
@@ -116,6 +155,12 @@ public sealed class KartRival : MonoBehaviour
         float advance = speed * dt;
         if (playerOnTrack && ahead > 0 && separation < 1.55f)
             advance = Mathf.Min(advance, Mathf.Max(0, ahead - 2.5f));
+        foreach (var other in All)
+        {
+            float gap = other.distance - distance;
+            if (other != this && gap > 0 && Mathf.Abs(other.lane - lane) < 1.4f)
+                advance = Mathf.Min(advance, Mathf.Max(0, gap - 2.4f));
+        }
         distance += advance;
         if (!Finished && distance >= FinishDistance)
         {
@@ -151,6 +196,33 @@ public sealed class KartRival : MonoBehaviour
 
         for (int i = 0; i < wheels.Length; i++)
             wheels[i].localRotation = Quaternion.Euler(0, i < 2 ? Steering * 25 : 0, 0) * Quaternion.Euler(spin, 0, 0);
+    }
+
+    // Convierte una posición del mundo en "metros recorridos desde la meta" sobre el óvalo (sirve para el puesto).
+    public static float RouteDistance(Vector3 point)
+    {
+        float route;
+        if (point.x >= HalfStraight)
+        {
+            float angle = Mathf.Atan2(point.z, point.x - HalfStraight);
+            route = StraightLength + (angle + Mathf.PI / 2) * Radius;
+        }
+        else if (point.x <= -HalfStraight)
+        {
+            float angle = Mathf.Atan2(point.z, point.x + HalfStraight);
+            if (angle < 0)
+                angle += 2 * Mathf.PI;
+            route = 2 * StraightLength + ArcLength + (angle - Mathf.PI / 2) * Radius;
+        }
+        else if (point.z < 0)
+        {
+            route = point.x + HalfStraight;
+        }
+        else
+        {
+            route = StraightLength + ArcLength + (HalfStraight - point.x);
+        }
+        return Mathf.Repeat(route - HalfStraight, LoopLength);
     }
 
     private static void SampleRoute(float distance, out Vector3 position, out Vector3 forward, out float curveDistance)

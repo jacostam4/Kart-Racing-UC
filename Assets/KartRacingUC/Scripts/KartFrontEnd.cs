@@ -8,23 +8,37 @@ using UnityEngine.UI;
 public sealed class KartFrontEnd : MonoBehaviour
 {
     [SerializeField] private bool selector;
+    // Lista de modelos de pilotos. Para agregar un personaje nuevo, arrastra su modelo aquí en el Inspector.
     [SerializeField] private GameObject[] pilots;
+    // Opcional: nombres a mostrar. Si se deja vacío, se usa el nombre del archivo sin "Avatar ".
+    [SerializeField] private string[] pilotNames;
 
     public static int SelectedPilot { get; private set; }
-    private static readonly string[] Names = { "Juan Acosta", "Gabriel Moreno" };
+    // El modelo elegido viaja a la escena de carrera a través de esta variable.
+    public static GameObject SelectedModel { get; private set; }
+    // Todos los pilotos del menú: la carrera los usa para escoger a los rivales.
+    public static GameObject[] AllPilots { get; private set; }
+    public static string[] AllNames { get; private set; }
+    private string[] Names;
     private static readonly Color Navy = new(0.035f, 0.065f, 0.105f);
     private static readonly Color Panel = new(0.075f, 0.125f, 0.19f);
     private static readonly Color Accent = new(1f, 0.48f, 0.17f);
     private static readonly Color Pale = new(0.87f, 0.91f, 0.96f);
-    private readonly Image[] cards = new Image[2];
-    private readonly Text[] cardNames = new Text[2];
-    private readonly RenderTexture[] previews = new RenderTexture[2];
+    private Image[] cards = new Image[0];
+    private Text[] cardNames = new Text[0];
+    private RenderTexture[] previews = new RenderTexture[0];
     private Font font;
     private bool loading;
 
     private void Start()
     {
         font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        Names = BuildNames();
+        if (selector)
+        {
+            AllPilots = pilots;
+            AllNames = Names;
+        }
         var canvas = new GameObject("Menu Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
         canvas.transform.SetParent(transform, false);
         canvas.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
@@ -53,9 +67,9 @@ public sealed class KartFrontEnd : MonoBehaviour
         if (selector)
         {
             if (keys.leftArrowKey.wasPressedThisFrame || keys.aKey.wasPressedThisFrame)
-                Select(0);
+                Select(Mathf.Max(0, SelectedPilot - 1));
             else if (keys.rightArrowKey.wasPressedThisFrame || keys.dKey.wasPressedThisFrame)
-                Select(1);
+                Select(Mathf.Min(Names.Length - 1, SelectedPilot + 1));
             if (keys.escapeKey.wasPressedThisFrame)
                 Load("MainMenu");
             else if (keys.enterKey.wasPressedThisFrame || keys.spaceKey.wasPressedThisFrame)
@@ -79,11 +93,21 @@ public sealed class KartFrontEnd : MonoBehaviour
     private void BuildSelector(Transform root)
     {
         Label(root, "Elige a tu piloto", 0.12f, 0.83f, 0.88f, 0.96f, 52, FontStyle.Bold, Pale);
-        for (int i = 0; i < Names.Length; i++)
+        int count = Names.Length;
+        cards = new Image[count];
+        cardNames = new Text[count];
+        previews = new RenderTexture[count];
+        // Las tarjetas se reparten solas según cuántos pilotos haya.
+        const float gap = 0.02f;
+        float span = count <= 2 ? 0.66f : 0.86f;
+        float start = 0.5f - span / 2;
+        float width = (span - gap * (count - 1)) / count;
+        int nameSize = count <= 3 ? 25 : 20;
+        for (int i = 0; i < count; i++)
         {
             int choice = i;
-            float left = 0.17f + i * 0.34f;
-            cards[i] = ImageAt(root, Names[i], left, 0.27f, left + 0.32f, 0.80f, Panel);
+            float left = start + i * (width + gap);
+            cards[i] = ImageAt(root, Names[i], left, 0.27f, left + width, 0.80f, Panel);
             var card = cards[i].transform;
             var button = cards[i].gameObject.AddComponent<Button>();
             button.transition = Selectable.Transition.None;
@@ -95,12 +119,30 @@ public sealed class KartFrontEnd : MonoBehaviour
             var image = preview.GetComponent<RawImage>();
             image.raycastTarget = false;
             image.texture = Preview(i);
-            cardNames[i] = Label(card, Names[i], 0.02f, 0.02f, 0.98f, 0.20f, 25, FontStyle.Bold, Pale);
+            cardNames[i] = Label(card, Names[i], 0.02f, 0.02f, 0.98f, 0.20f, nameSize, FontStyle.Bold, Pale);
         }
 
         ButtonAt(root, "ESC  ·  VOLVER", 0.16f, 0.10f, 0.39f, 0.20f, Panel, () => Load("MainMenu"));
         ButtonAt(root, "ENTER  ·  CORRER", 0.61f, 0.10f, 0.84f, 0.20f, Accent, () => Load("TestKart"));
-        Select(SelectedPilot);
+        Select(Mathf.Clamp(SelectedPilot, 0, count - 1));
+    }
+
+    private string[] BuildNames()
+    {
+        var result = new string[pilots.Length];
+        for (int i = 0; i < pilots.Length; i++)
+        {
+            if (pilotNames != null && i < pilotNames.Length && !string.IsNullOrWhiteSpace(pilotNames[i]))
+            {
+                result[i] = pilotNames[i];
+                continue;
+            }
+            string name = pilots[i] != null ? pilots[i].name : "Piloto " + (i + 1);
+            if (name.StartsWith("Avatar "))
+                name = name.Substring("Avatar ".Length);
+            result[i] = name.Replace(".glb", "");
+        }
+        return result;
     }
 
     private Texture Preview(int index)
@@ -135,6 +177,7 @@ public sealed class KartFrontEnd : MonoBehaviour
     private void Select(int index)
     {
         SelectedPilot = index;
+        SelectedModel = pilots[index];
         for (int i = 0; i < cards.Length; i++)
         {
             cards[i].color = i == index ? Accent : Panel;
@@ -147,6 +190,8 @@ public sealed class KartFrontEnd : MonoBehaviour
         if (loading)
             return;
         loading = true;
+        if (scene == "TestKart")
+            KartLevels.Current = 0; // una partida nueva siempre empieza en el nivel 1
         SceneManager.LoadScene(scene);
     }
 
