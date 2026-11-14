@@ -9,9 +9,9 @@ using UnityEngine.UI;
 // ============================================================================
 //  KART LEVELS: 3 niveles con progresión + sistema de vidas.
 //
-//  - Nivel 1 (DÍA): rivales tranquilos, 3 vidas.
-//  - Nivel 2 (ATARDECER): rivales más rápidos, 3 vidas.
-//  - Nivel 3 (NOCHE): rivales al máximo, solo 2 vidas.
+//  - Nivel 1 (PISTA): rivales tranquilos, 3 vidas.
+//  - Nivel 2 (DESIERTO): rivales más rápidos, 3 vidas.
+//  - Nivel 3 (SELVA): rivales al máximo, solo 2 vidas.
 //  - Para pasar al siguiente nivel hay que llegar de 1º.
 //  - Cada choque fuerte contra la barrera quita una vida. Sin vidas: GAME OVER.
 //
@@ -23,43 +23,23 @@ public sealed class KartLevels : MonoBehaviour
 {
     private sealed class Level
     {
+        public string Scene;
         public string Name;
         public string Goal;
-        public float RivalPace;   // 1 = velocidad normal de los rivales
+        public float RivalPace;
         public int Lives;
-        public bool ChangeLight;  // false = se deja la luz original de la escena
-        public Color Sun;
-        public float SunIntensity;
-        public float SunHeight;   // grados del sol sobre el horizonte
-        public Color Ambient;
-        public Color Fog;
-        public float FogDensity;
-        public bool Night;
     }
 
-    // ---------------- CONFIGURACIÓN DE LOS NIVELES ----------------
     private static readonly Level[] Levels =
     {
-        new Level
-        {
-            Name = "DÍA", Goal = "Calienta motores: los rivales van tranquilos.",
-            RivalPace = 0.9f, Lives = 3, ChangeLight = false
-        },
-        new Level
-        {
-            Name = "ATARDECER", Goal = "Los rivales aceleran. ¡Cuida tus vidas!",
-            RivalPace = 1.0f, Lives = 3, ChangeLight = true,
-            Sun = new Color(1f, 0.58f, 0.32f), SunIntensity = 0.9f, SunHeight = 9,
-            Ambient = new Color(0.58f, 0.44f, 0.44f), Fog = new Color(0.95f, 0.62f, 0.45f), FogDensity = 0.006f
-        },
-        new Level
-        {
-            Name = "NOCHE", Goal = "La gran final: rivales al máximo y solo 2 vidas.",
-            RivalPace = 1.07f, Lives = 2, ChangeLight = true, Night = true,
-            Sun = new Color(0.55f, 0.65f, 1f), SunIntensity = 0.4f, SunHeight = 38,
-            Ambient = new Color(0.2f, 0.23f, 0.38f), Fog = new Color(0.04f, 0.05f, 0.12f), FogDensity = 0.012f
-        },
+        new Level { Scene = "TestKart", Name = "PISTA", Goal = "Calienta motores: los rivales van tranquilos.",
+            RivalPace = 0.9f, Lives = 3 },
+        new Level { Scene = "DesertCircuit", Name = "DESIERTO", Goal = "Los rivales aceleran. ¡Cuida tus vidas!",
+            RivalPace = 1f, Lives = 3 },
+        new Level { Scene = "JungleCircuit", Name = "SELVA", Goal = "La gran final: rivales al máximo y solo 2 vidas.",
+            RivalPace = 1.07f, Lives = 2 }
     };
+
     private const float HardHitSpeed = 5;      // velocidad mínima del choque para perder vida
     private const float SafeSeconds = 1.2f;    // segundos sin perder otra vida después de un choque
     // ----------------------------------------------------------------
@@ -86,6 +66,8 @@ public sealed class KartLevels : MonoBehaviour
     private float hitAt = -10;
     private float bannerAt;
     private Result result;
+    private float creditsEnd;
+    private const float CreditsDuration = 12f;
 
     private Text[] hearts;
     private Image flash;
@@ -118,7 +100,7 @@ public sealed class KartLevels : MonoBehaviour
     // ---------- Preparación ----------
     private void OnEnable()
     {
-        Current = Mathf.Clamp(Current, 0, Count - 1);
+        Current = Mathf.Max(0, System.Array.FindIndex(Levels, level => level.Scene == gameObject.scene.name));
         race = GetComponent<KartTimeTrial>();
         player = FindAnyObjectByType<KartMovement>();
         lights = FindAnyObjectByType<KartStartLights>();
@@ -208,6 +190,13 @@ public sealed class KartLevels : MonoBehaviour
                 Show(Result.Retry);
         }
 
+        if (result == Result.Champion)
+        {
+            if (Time.unscaledTime >= creditsEnd)
+                GoToMenu();
+            return;
+        }
+
         var keys = Keyboard.current;
         if (result != Result.None && keys != null &&
             (keys.enterKey.wasPressedThisFrame || keys.numpadEnterKey.wasPressedThisFrame))
@@ -227,11 +216,8 @@ public sealed class KartLevels : MonoBehaviour
                 primaryLabel.text = "ENTER  ·  SIGUIENTE NIVEL";
                 break;
             case Result.Champion:
-                endTitle.text = "¡CAMPEÓN!";
-                endTitle.color = new Color(1f, 0.82f, 0.2f);
-                endMessage.text = "Ganaste los 3 niveles de Kart Racing UC.";
-                primaryLabel.text = "ENTER  ·  MENÚ PRINCIPAL";
-                break;
+                ShowCredits();
+                return;
             case Result.Retry:
                 endTitle.text = $"QUEDASTE {race.Place}º";
                 endTitle.color = Pale;
@@ -253,16 +239,34 @@ public sealed class KartLevels : MonoBehaviour
         if (result == Result.NextLevel)
         {
             Current++;
-            Reload();
-        }
-        else if (result == Result.Champion)
-        {
-            GoToMenu();
+            SceneManager.LoadScene(Levels[Current].Scene);
         }
         else
         {
             Reload();
         }
+    }
+
+    private void ShowCredits()
+    {
+        creditsEnd = Time.unscaledTime + CreditsDuration;
+        player.CanDrive = false;
+        player.enabled = false;
+        if (TryGetComponent<KartRaceSelection>(out var selection))
+            selection.enabled = false;
+
+        var root = NewCanvas("Créditos del campeonato", 40);
+        NewImage(root, "Fondo", 0, 0, 1, 1, Navy).raycastTarget = true;
+        var card = NewImage(root, "Créditos", 0.12f, 0.08f, 0.88f, 0.92f, Panel);
+        NewImage(card.transform, "Franja", 0, 0.985f, 1, 1, Accent);
+        NewText(card.transform, "KART RACING UC", 0.07f, 0.82f, 0.93f, 0.94f, 31, Pale, TextAnchor.MiddleCenter);
+        NewText(card.transform, "¡CAMPEÓN DEL CAMPEONATO!", 0.06f, 0.69f, 0.94f, 0.82f,
+            36, new Color(1f, 0.82f, 0.2f), TextAnchor.MiddleCenter);
+        NewText(card.transform, "Juan Camilo Acosta Mahecha\nGabriel Santiago Moreno Viveros\nJosé Miguel Rodríguez Bohórquez",
+            0.07f, 0.40f, 0.93f, 0.68f, 25, Pale, TextAnchor.MiddleCenter);
+        NewText(card.transform, "Universidad Central\nModelado y Videojuegos\nCarlos Pinzón · Docente de la materia",
+            0.07f, 0.16f, 0.93f, 0.39f, 22, Pale, TextAnchor.MiddleCenter);
+        NewText(card.transform, "Regreso automático al inicio", 0.07f, 0.045f, 0.93f, 0.13f, 16, Pale, TextAnchor.MiddleCenter);
     }
 
     private static void Reload() => SceneManager.LoadScene(SceneManager.GetActiveScene().name);
@@ -273,33 +277,35 @@ public sealed class KartLevels : MonoBehaviour
         SceneManager.LoadScene("MainMenu");
     }
 
-    // ---------- Ambiente de cada nivel ----------
     private void ApplyLook()
     {
-        if (!Now.ChangeLight)
-            return;
-
+        int hour = KartFrontEnd.SelectedHour;
+        bool night = hour == 2;
+        bool sunset = hour == 1;
+        Color sky = night ? new Color(0.06f, 0.10f, 0.18f) : new Color(0.92f, 0.56f, 0.36f);
         foreach (var light in FindObjectsByType<Light>())
         {
-            if (light.type != LightType.Directional)
+            if (light.type != LightType.Directional || light.gameObject.scene != gameObject.scene)
                 continue;
-            light.color = Now.Sun;
-            light.intensity *= Now.SunIntensity;
-            Vector3 angles = light.transform.eulerAngles;
-            light.transform.rotation = Quaternion.Euler(Now.SunHeight, angles.y, 0);
+
+            light.color = night ? new Color(0.62f, 0.74f, 1f) :
+                sunset ? new Color(1f, 0.66f, 0.40f) : Color.white;
+            light.intensity = night ? 0.7f : sunset ? 1.15f : 1.5f;
+            light.transform.rotation = Quaternion.Euler(night ? 32 : sunset ? 14 : 48, light.transform.eulerAngles.y, 0);
         }
 
         RenderSettings.ambientMode = AmbientMode.Flat;
-        RenderSettings.ambientLight = Now.Ambient;
-        RenderSettings.fog = true;
+        RenderSettings.ambientLight = night ? new Color(0.30f, 0.35f, 0.50f) :
+            sunset ? new Color(0.58f, 0.46f, 0.42f) : new Color(0.63f, 0.68f, 0.73f);
+        RenderSettings.fog = night || sunset;
         RenderSettings.fogMode = FogMode.ExponentialSquared;
-        RenderSettings.fogColor = Now.Fog;
-        RenderSettings.fogDensity = Now.FogDensity;
+        RenderSettings.fogColor = sky;
+        RenderSettings.fogDensity = night ? 0.009f : 0.005f;
 
-        if (Now.Night && Camera.main != null)
+        if ((night || sunset) && Camera.main != null)
         {
             Camera.main.clearFlags = CameraClearFlags.SolidColor;
-            Camera.main.backgroundColor = Now.Fog;
+            Camera.main.backgroundColor = sky;
         }
     }
 
@@ -411,3 +417,9 @@ public sealed class KartLevels : MonoBehaviour
         rect.offsetMax = Vector2.zero;
     }
 }
+
+
+
+
+
+

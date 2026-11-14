@@ -32,6 +32,12 @@ public sealed class KartMovement : MonoBehaviour
     }
 
     public float Speed => speed;
+    public bool TouchAccelerate { get; set; }
+    public bool TouchBrake { get; set; }
+    public bool TouchReverse { get; set; }
+    public float TouchSteering { get; set; }
+    public void RequestBoost() => boostRequested = true;
+    public void RequestReset() => resetRequested = true;
     public bool IsBraking { get; private set; }
     public event System.Action<Vector3, Vector3, float> Impact;
     public event System.Action ReturnedToGrid;
@@ -83,10 +89,10 @@ public sealed class KartMovement : MonoBehaviour
         }
 
         var keyboard = Keyboard.current;
-        bool accelerate = keyboard != null && (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed);
-        bool reverse = keyboard != null && (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed);
-        bool brake = keyboard != null && keyboard.spaceKey.isPressed;
-        float turn = 0;
+        bool accelerate = TouchAccelerate || keyboard != null && (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed);
+        bool reverse = TouchReverse || keyboard != null && (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed);
+        bool brake = TouchBrake || keyboard != null && keyboard.spaceKey.isPressed;
+        float turn = TouchSteering;
         if (keyboard != null)
         {
             if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
@@ -104,7 +110,7 @@ public sealed class KartMovement : MonoBehaviour
         if (IsBoosting)
             Nitro = Mathf.Max(0, Nitro - 30 * dt);
 
-        Steering = Mathf.MoveTowards(Steering, turn, 5 * dt);
+        Steering = Mathf.MoveTowards(Steering, Mathf.Clamp(turn, -1, 1), 5 * dt);
         float desiredSpeed = IsBoosting ? 23 : brake || accelerate == reverse ? 0 : accelerate ? 15 : -4;
         IsBraking = Mathf.Abs(speed) > 1.5f && (brake || speed * desiredSpeed < 0);
         float response = brake ? 27 : desiredSpeed == 0 ? 4 :
@@ -202,6 +208,7 @@ public sealed class KartMovement : MonoBehaviour
     private bool IsObstacle(Collider candidate) =>
         candidate != null && candidate != chassis && candidate != road && candidate != ground;
 }
+
 
 
 

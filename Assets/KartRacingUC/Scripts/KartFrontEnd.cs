@@ -13,6 +13,10 @@ public sealed class KartFrontEnd : MonoBehaviour
     // Opcional: nombres a mostrar. Si se deja vacío, se usa el nombre del archivo sin "Avatar ".
     [SerializeField] private string[] pilotNames;
 
+    private static readonly string[] Hours = { "DÍA", "ATARDECER", "NOCHE" };
+    private readonly Image[] hourButtons = new Image[3];
+    public static int SelectedHour { get; private set; }
+
     public static int SelectedPilot { get; private set; }
     // El modelo elegido viaja a la escena de carrera a través de esta variable.
     public static GameObject SelectedModel { get; private set; }
@@ -75,19 +79,44 @@ public sealed class KartFrontEnd : MonoBehaviour
             else if (keys.enterKey.wasPressedThisFrame || keys.spaceKey.wasPressedThisFrame)
                 Load("TestKart");
         }
-        else if (keys.spaceKey.wasPressedThisFrame || keys.enterKey.wasPressedThisFrame)
+        else
         {
-            Load("CharacterSelection");
+            if (keys.leftArrowKey.wasPressedThisFrame || keys.aKey.wasPressedThisFrame)
+                SelectHour((SelectedHour + Hours.Length - 1) % Hours.Length);
+            else if (keys.rightArrowKey.wasPressedThisFrame || keys.dKey.wasPressedThisFrame)
+                SelectHour((SelectedHour + 1) % Hours.Length);
+
+            if (keys.spaceKey.wasPressedThisFrame || keys.enterKey.wasPressedThisFrame)
+                Load("CharacterSelection");
         }
     }
 
     private void BuildHome(Transform root)
     {
-        ImageAt(root, "Title panel", 0.13f, 0.30f, 0.87f, 0.74f, Panel);
-        Label(root, "KART RACING UC", 0.15f, 0.47f, 0.85f, 0.68f, 72, FontStyle.Bold, Pale);
-        Label(root, "Carreras arcade · Contrarreloj de 3 vueltas", 0.16f, 0.39f, 0.84f, 0.47f, 23, FontStyle.Normal, Pale);
-        ButtonAt(root, "ESPACIO  ·  EMPEZAR", 0.33f, 0.22f, 0.67f, 0.32f, Accent,
+        ImageAt(root, "Title panel", 0.13f, 0.25f, 0.87f, 0.79f, Panel);
+        Label(root, "KART RACING UC", 0.15f, 0.54f, 0.85f, 0.74f, 72, FontStyle.Bold, Pale);
+        Label(root, "Horario del campeonato", 0.16f, 0.46f, 0.84f, 0.54f, 23, FontStyle.Normal, Pale);
+        for (int i = 0; i < Hours.Length; i++)
+        {
+            int choice = i;
+            float left = 0.19f + i * 0.21f;
+            hourButtons[i] = ButtonAt(root, Hours[i], left, 0.34f, left + 0.20f, 0.44f,
+                Navy, () => SelectHour(choice));
+        }
+
+        SelectHour(SelectedHour);
+        ButtonAt(root, "ESPACIO  ·  EMPEZAR", 0.33f, 0.17f, 0.67f, 0.27f, Accent,
             () => Load("CharacterSelection"));
+    }
+
+    private void SelectHour(int index)
+    {
+        SelectedHour = index;
+        for (int i = 0; i < hourButtons.Length; i++)
+        {
+            hourButtons[i].color = i == index ? Accent : Navy;
+            hourButtons[i].GetComponentInChildren<Text>().color = i == index ? Navy : Pale;
+        }
     }
 
     private void BuildSelector(Transform root)
@@ -231,13 +260,14 @@ public sealed class KartFrontEnd : MonoBehaviour
         return label;
     }
 
-    private void ButtonAt(Transform parent, string label, float left, float bottom, float right, float top,
+    private Image ButtonAt(Transform parent, string label, float left, float bottom, float right, float top,
         Color background, UnityEngine.Events.UnityAction click)
     {
         var image = ImageAt(parent, label, left, bottom, right, top, background);
         var button = image.gameObject.AddComponent<Button>();
         button.onClick.AddListener(click);
         Label(image.transform, label, 0, 0, 1, 1, 22, FontStyle.Bold, background == Accent ? Navy : Pale);
+        return image;
     }
 
     private static void SetRect(RectTransform rect, float left, float bottom, float right, float top)
@@ -248,4 +278,6 @@ public sealed class KartFrontEnd : MonoBehaviour
         rect.offsetMax = Vector2.zero;
     }
 }
+
+
 

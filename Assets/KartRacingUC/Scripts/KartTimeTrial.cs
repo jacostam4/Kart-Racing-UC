@@ -62,11 +62,13 @@ public sealed class KartTimeTrial : MonoBehaviour
 
     private float PlayerProgress()
     {
-        float onLap = KartRival.RouteDistance(kart.transform.position);
+        var route = GetComponent<KartCircuitRoute>();
+        float length = route != null ? route.Length : KartRival.LoopLength;
+        float onLap = route != null ? route.Project(kart.transform.position) : KartRival.RouteDistance(kart.transform.position);
         // Antes de cruzar la meta (en la parrilla o al final de la vuelta) cuenta como vuelta anterior.
-        if (nextCheckpoint == 0 && onLap > KartRival.LoopLength / 2)
-            onLap -= KartRival.LoopLength;
-        return completedLaps * KartRival.LoopLength + onLap;
+        if (nextCheckpoint == 0 && onLap > length / 2)
+            onLap -= length;
+        return completedLaps * length + onLap;
     }
 
     private GUIStyle caption;
@@ -125,7 +127,7 @@ public sealed class KartTimeTrial : MonoBehaviour
         previousPosition = position;
     }
 
-    private static bool Crossed(Transform gate, Vector3 from, Vector3 to)
+    private bool Crossed(Transform gate, Vector3 from, Vector3 to)
     {
         float before = Vector3.Dot(from - gate.position, gate.forward);
         float after = Vector3.Dot(to - gate.position, gate.forward);
@@ -133,7 +135,7 @@ public sealed class KartTimeTrial : MonoBehaviour
             return false;
 
         Vector3 crossing = Vector3.Lerp(from, to, -before / (after - before)) - gate.position;
-        return Mathf.Abs(Vector3.Dot(crossing, gate.right)) <= GateHalfWidth && Mathf.Abs(crossing.y) < 3;
+        return Mathf.Abs(Vector3.Dot(crossing, gate.right)) <= (TryGetComponent<KartCircuitRoute>(out var route) ? route.HalfWidth : GateHalfWidth) && Mathf.Abs(crossing.y) < 3;
     }
 
     private void CompleteLap()
@@ -243,7 +245,7 @@ public sealed class KartTimeTrial : MonoBehaviour
 
     private void DrawNitro(float scale, Color color)
     {
-        float y = Screen.height / scale - 92;
+        float y = Screen.height / scale - (Application.isMobilePlatform ? 200 : 92);
         GUI.color = new Color(0.12f, 0.16f, 0.21f, 0.90f);
         GUI.DrawTexture(new Rect(16, y, 250, 76), Texture2D.whiteTexture);
         GUI.color = new Color(0.26f, 0.32f, 0.38f);
@@ -252,7 +254,7 @@ public sealed class KartTimeTrial : MonoBehaviour
         GUI.DrawTexture(new Rect(30, y + 37, 220 * kart.Nitro / 100, 12), Texture2D.whiteTexture);
         GUI.color = color;
         GUI.Label(new Rect(30, y + 9, 220, 24), $"NITRO  {Mathf.CeilToInt(kart.Nitro)}%     BOTELLAS  {kart.Bottles}", caption);
-        GUI.Label(new Rect(30, y + 49, 220, 24), "E  ·  Impulso", caption);
+        GUI.Label(new Rect(30, y + 49, 220, 24), Application.isMobilePlatform ? "Toca NITRO" : "E  ·  Impulso", caption);
     }
     private void DrawMetric(float x, string label, string text)
     {
@@ -266,6 +268,9 @@ public sealed class KartTimeTrial : MonoBehaviour
         return $"{milliseconds / 60000:00}:{milliseconds / 1000 % 60:00}.{milliseconds % 1000:000}";
     }
 }
+
+
+
 
 
 

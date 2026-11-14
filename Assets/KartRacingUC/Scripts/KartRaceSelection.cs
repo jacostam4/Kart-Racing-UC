@@ -42,6 +42,8 @@ public sealed class KartRaceSelection : MonoBehaviour
             copy.GetComponent<KartRival>().Configure(-11.5f, -1.6f, 0.97f);
             copy.GetComponent<KartRival>().DisplayName = FirstName(names[index]);
             copy.GetComponent<KartDriverPresentation>().ReplaceDriver(pilots[index]);
+            if (copy.GetComponent<KartAudio>() == null)
+                copy.AddComponent<KartAudio>();
         }
 
         // Jugador.
@@ -70,3 +72,4 @@ public sealed class KartRaceSelection : MonoBehaviour
             SceneManager.LoadScene("CharacterSelection");
     }
 }
+

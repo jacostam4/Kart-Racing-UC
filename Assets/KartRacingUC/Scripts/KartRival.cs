@@ -22,7 +22,9 @@ public sealed class KartRival : MonoBehaviour
     private const float StraightLength = 2 * HalfStraight;
     private const float ArcLength = Mathf.PI * Radius;
     public const float LoopLength = 2 * (StraightLength + ArcLength);
-    private const float FinishDistance = LoopLength * 3;
+    private KartCircuitRoute route;
+    private float TrackLength => route != null ? route.Length : LoopLength;
+    private float FinishDistance => TrackLength * 3;
     private const float TopSpeed = 13;
     private const float CornerSpeed = 10.5f;
     private const float LaneLimit = 2.15f;
@@ -39,7 +41,8 @@ public sealed class KartRival : MonoBehaviour
     public float Steering { get; private set; }
     public bool Finished { get; private set; }
     public double FinishTime { get; private set; }
-    public int Lap => Mathf.Clamp(Mathf.FloorToInt(distance / LoopLength) + 1, 1, 3);
+    public int Lap => Mathf.Clamp(Mathf.FloorToInt(distance / TrackLength) + 1, 1, 3);
+    public float Speed => speed;
     public float Progress => distance;
     public string DisplayName { get; set; } = "Gabriel";
 
@@ -54,6 +57,7 @@ public sealed class KartRival : MonoBehaviour
 
     private void OnEnable()
     {
+        route = road.GetComponentInParent<KartCircuitRoute>();
         All.Add(this);
         lights.CountdownStarted += ResetRival;
         lights.GreenLight += Begin;
@@ -225,8 +229,13 @@ public sealed class KartRival : MonoBehaviour
         return Mathf.Repeat(route - HalfStraight, LoopLength);
     }
 
-    private static void SampleRoute(float distance, out Vector3 position, out Vector3 forward, out float curveDistance)
+    private void SampleRoute(float distance, out Vector3 position, out Vector3 forward, out float curveDistance)
     {
+        if (this.route != null)
+        {
+            this.route.Sample(distance, out position, out forward, out curveDistance);
+            return;
+        }
         float route = Mathf.Repeat(distance + HalfStraight, LoopLength);
         if (route < StraightLength)
         {
@@ -265,5 +274,9 @@ public sealed class KartRival : MonoBehaviour
         forward = new Vector3(-sine, 0, cosine);
     }
 }
+
+
+
+
 
 
